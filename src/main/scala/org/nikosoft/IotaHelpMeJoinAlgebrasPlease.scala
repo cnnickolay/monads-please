@@ -2,8 +2,10 @@ package org.nikosoft
 
 import iotaz.TListK.:::
 import iotaz._
-import scalaz.{Id, _}
+import scalaz._
+import Scalaz._
 
+import scala.collection.parallel.Task
 import scala.language.higherKinds
 
 
@@ -24,22 +26,22 @@ object IotaHelpMeJoinAlgebrasPlease extends App {
 
   type Algebra[A] = CopK[Printer ::: Logger ::: Transaction ::: TNilK, A]
 
-  implicit val PrinterInterpreter: Printer ~> Id.Id = new (Printer ~> Id.Id) {
-    override def apply[A](fa: Printer[A]): Id.Id[A] = fa match {
-      case PrintToConsole(msg) => println(msg); "done"
+  implicit val PrinterInterpreter: Printer ~> Option = new (Printer ~> Option) {
+    override def apply[A](fa: Printer[A]): Option[A] = fa match {
+      case PrintToConsole(msg) => println(msg); "done".some.asInstanceOf[Option[A]]
     }
   }
 
-  implicit val LoggerInterpreter: Logger ~> Id.Id = new (Logger ~> Id.Id) {
-    override def apply[A](fa: Logger[A]): Id.Id[A] = fa match {
-      case LogDebug(msg) => println(s"Logging $msg"); ()
+  implicit val LoggerInterpreter: Logger ~> Option = new (Logger ~> Option) {
+    override def apply[A](fa: Logger[A]): Option[A] = fa match {
+      case LogDebug(msg) => println(s"Logging $msg"); None
     }
   }
 
-  implicit val TransactionInterpreter: Transaction ~> Id.Id = new (Transaction ~> Id.Id) {
-    override def apply[A](fa: Transaction[A]): Id.Id[A] = fa match {
-      case StartTransaction() => println("transaction started")
-      case CommitTransaction() => println("transaction committed")
+  implicit val TransactionInterpreter: Transaction ~> Option = new (Transaction ~> Option) {
+    override def apply[A](fa: Transaction[A]): Option[A] = fa match {
+      case StartTransaction() => println("transaction started"); None
+      case CommitTransaction() => println("transaction committed"); None
     }
   }
 
@@ -56,7 +58,7 @@ object IotaHelpMeJoinAlgebrasPlease extends App {
     _ <- CommitTransaction().liftFree
   } yield ()
 
-  val interpreter: scalaz.NaturalTransformation[Algebra, Id.Id] = CopK.NaturalTransformation.summon[Algebra, Id.Id]
+  val interpreter: scalaz.NaturalTransformation[Algebra, Option] = CopK.NaturalTransformation.summon[Algebra, Option]
 
   func.foldMap(interpreter)
 

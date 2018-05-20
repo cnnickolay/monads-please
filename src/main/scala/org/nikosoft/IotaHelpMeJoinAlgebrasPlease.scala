@@ -36,12 +36,12 @@ object IotaHelpMeJoinAlgebrasPlease extends App {
     override def apply[A](fa: Logger[A]): Option[A] = fa match {
       case LogDebug(msg) => println(s"Logging $msg"); Option(()).asInstanceOf[Option[A]]
     }
-  }
+}
 
   implicit val TransactionInterpreter: Transaction ~> Option = new (Transaction ~> Option) {
     override def apply[A](fa: Transaction[A]): Option[A] = fa match {
       case StartTransaction() => println("transaction started"); Option(()).asInstanceOf[Option[A]]
-      case CommitTransaction() => println("transaction committed"); None
+      case CommitTransaction() => println("transaction committed"); Option(()).asInstanceOf[Option[A]]
     }
   }
 
@@ -51,15 +51,23 @@ object IotaHelpMeJoinAlgebrasPlease extends App {
     def liftFree: Free[Algebra, A] = Free.liftF(fa).mapSuspension(ev.inj)
   }
 
-  val func: Free[Algebra, Unit] = for {
-    _ <- StartTransaction().liftFree
-    msg <- PrintToConsole("Liiiiiveeeeeee").liftFree
+  object Algebra {
+    def startTransaction() = StartTransaction().liftFree
+    def printToConsole(message: String) = PrintToConsole(message).liftFree
+  }
+
+  import Algebra._
+
+  val func = for {
+    _ <- startTransaction()
+    msg <- printToConsole("Liiiiiveeeeeee")
     _ <- LogDebug(s"It's aliiiivvvveeeeee $msg").liftFree
     _ <- CommitTransaction().liftFree
-  } yield ()
+  } yield msg
 
   val interpreter: scalaz.NaturalTransformation[Algebra, Option] = CopK.NaturalTransformation.summon[Algebra, Option]
 
-  func.foldMap(interpreter)
+  val str = func.foldMap(interpreter)
+  println(str)
 
 }

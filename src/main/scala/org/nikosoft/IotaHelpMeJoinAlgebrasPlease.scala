@@ -28,19 +28,19 @@ object IotaHelpMeJoinAlgebrasPlease extends App {
 
   implicit val PrinterInterpreter: Printer ~> Option = new (Printer ~> Option) {
     override def apply[A](fa: Printer[A]): Option[A] = fa match {
-      case PrintToConsole(msg) => println(msg); "done".some.asInstanceOf[Option[A]]
+      case PrintToConsole(msg) => println("test");println(msg); "done".some.asInstanceOf[Option[A]]
     }
   }
 
   implicit val LoggerInterpreter: Logger ~> Option = new (Logger ~> Option) {
     override def apply[A](fa: Logger[A]): Option[A] = fa match {
-      case LogDebug(msg) => println(s"Logging $msg"); None
+      case LogDebug(msg) => println(s"Logging $msg"); Option(()).asInstanceOf[Option[A]]
     }
   }
 
   implicit val TransactionInterpreter: Transaction ~> Option = new (Transaction ~> Option) {
     override def apply[A](fa: Transaction[A]): Option[A] = fa match {
-      case StartTransaction() => println("transaction started"); None
+      case StartTransaction() => println("transaction started"); Option(()).asInstanceOf[Option[A]]
       case CommitTransaction() => println("transaction committed"); None
     }
   }

@@ -65,9 +65,14 @@ object IotaHelpMeJoinAlgebrasPlease extends App {
     _ <- CommitTransaction().liftFree
   } yield msg
 
+  val func2 = for {
+    _ <- func
+    msg <- printToConsole("Liiiiiveeeeeee")
+  } yield msg
+
   val interpreter: scalaz.NaturalTransformation[Algebra, Option] = CopK.NaturalTransformation.summon[Algebra, Option]
 
-  val str = func.foldMap(interpreter)
+  val str = func2.foldMap(interpreter)
   println(str)
 
 }

@@ -62,7 +62,9 @@ object IotaHelpMeJoinAlgebrasPlease extends App {
     _ <- startTransaction()
     msg <- printToConsole("Liiiiiveeeeeee")
     _ <- LogDebug(s"It's aliiiivvvveeeeee $msg").liftFree
-    _ <- CommitTransaction().liftFree
+    _ <- true.option(CommitTransaction().liftFree).sequenceU
+    res <- true.option(printToConsole("Liiiiiveeeeeee")).sequenceU
+    msg2 <- List(printToConsole("Liiiiiveeeeeee")).sequenceU
   } yield msg
 
   val func2 = for {

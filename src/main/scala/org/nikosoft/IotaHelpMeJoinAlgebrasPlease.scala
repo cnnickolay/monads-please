@@ -5,7 +5,6 @@ import iotaz._
 import scalaz._
 import Scalaz._
 
-import scala.collection.parallel.Task
 import scala.language.higherKinds
 
 
@@ -28,7 +27,7 @@ object IotaHelpMeJoinAlgebrasPlease extends App {
 
   implicit val PrinterInterpreter: Printer ~> Option = new (Printer ~> Option) {
     override def apply[A](fa: Printer[A]): Option[A] = fa match {
-      case PrintToConsole(msg) => println("test");println(msg); "done".some.asInstanceOf[Option[A]]
+      case PrintToConsole(msg) => msg.some.asInstanceOf[Option[A]]
     }
   }
 
@@ -45,36 +44,32 @@ object IotaHelpMeJoinAlgebrasPlease extends App {
     }
   }
 
-  implicit class AlgebraSyntax[F[_], A](fa: F[A])(
-    implicit ev: CopK.Inject[F, Algebra]
-  ) {
-    def liftFree: Free[Algebra, A] = Free.liftF(fa).mapSuspension(ev.inj)
+  class Printers[T[A] <: CopK[_, A]](implicit ev: CopK.Inject[Printer, T]) {
+    def printToConsole(message: String) = Free.liftF(PrintToConsole(message)).mapSuspension(ev.inj)
+  }
+  object Printers {
+    implicit def instantiate[T[A] <: CopK[_, A]](implicit I: CopK.Inject[Printer, T]) = new Printers[T]
   }
 
-  object Algebra {
-    def startTransaction() = StartTransaction().liftFree
-    def printToConsole(message: String) = PrintToConsole(message).liftFree
+  class Loggers[T[A] <: CopK[_, A]](implicit ev: CopK.Inject[Logger, T]) {
+    def logDebug(message: String) = Free.liftF(LogDebug(message)).mapSuspension(ev.inj)
   }
-
-  import Algebra._
-
-  val func = for {
-    _ <- startTransaction()
-    msg <- printToConsole("Liiiiiveeeeeee")
-    _ <- LogDebug(s"It's aliiiivvvveeeeee $msg").liftFree
-    _ <- true.option(CommitTransaction().liftFree).sequenceU
-    res <- true.option(printToConsole("Liiiiiveeeeeee")).sequenceU
-    msg2 <- List(printToConsole("Liiiiiveeeeeee")).sequenceU
-  } yield msg
-
-  val func2 = for {
-    _ <- func
-    msg <- printToConsole("Liiiiiveeeeeee")
-  } yield msg
+  object Loggers {
+    implicit def instantiate[T[A] <: CopK[_, A]](implicit I: CopK.Inject[Logger, T]) = new Loggers[T]
+  }
 
   val interpreter: scalaz.NaturalTransformation[Algebra, Option] = CopK.NaturalTransformation.summon[Algebra, Option]
 
-  val str = func2.foldMap(interpreter)
-  println(str)
+  def p(implicit P: Printers[Algebra], L: Loggers[Algebra]) = {
+    import P._, L._
+
+    for {
+      s <- printToConsole("hello")
+      s2 <- printToConsole(s + "_there")
+      _ <- logDebug(s2)
+    } yield s2
+  }
+
+  println(p.foldMap(interpreter))
 
 }

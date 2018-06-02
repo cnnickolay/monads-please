@@ -24,6 +24,7 @@ object TasksAndConcurrency extends App {
     20
   }
 
+/*
   implicit val n = new Nondeterminism[Task] {
     override def chooseAny[A](head: Task[A], tail: Seq[Task[A]]): Task[(A, Seq[Task[A]])] = new Task(head.get.map(_.map((_, tail))))
 
@@ -31,9 +32,12 @@ object TasksAndConcurrency extends App {
 
     override def bind[A, B](fa: Task[A])(f: (A) => Task[B]): Task[B] = fa.flatMap(f)
   }
+*/
 
-  val task: Task[List[Int]] = Nondeterminism[Task].gatherUnordered(Seq(t1, t2))
+//  val task: Task[List[Int]] = Nondeterminism[Task].gatherUnordered(Seq(t1, t2))
 
-  Task.fork(task).unsafePerformSync
+//  Task.fork(task).unsafePerformSync
+
+//  (t1 |@| t2)
 
 }

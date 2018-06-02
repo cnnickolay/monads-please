@@ -28,9 +28,9 @@ object TasksAndStateConcurrency extends App {
   type IntState[A] = StateT[Task, Int, A]
 
   implicit val n = new Nondeterminism[IntState] {
-    override def chooseAny[A](head: IntState[A], tail: Seq[IntState[A]]): IntState[(A, Seq[IntState[A]])] = for {
-      a <- head
-    } yield (a, tail)
+    val F = Nondeterminism[Future]
+    override def chooseAny[A](h: IntState[A], t: Seq[IntState[A]]): IntState[(A, Seq[IntState[A]])] =
+      h.map((_, t))
 
     override def point[A](a: => A): IntState[A] = StateT[Task, Int, A](i => Task((i, a)))
 
@@ -40,8 +40,8 @@ object TasksAndStateConcurrency extends App {
     } yield b
   }
 
-  val result = Nondeterminism[IntState].gatherUnordered(Seq(t1, t2))
-  val task: Task[(Int, List[Int])] = result.run(100)
+  val result = Nondeterminism[IntState].nmap2(t1, t2)(_ + _)
+  val task = result.run(100)
 
   Task.fork(task)(Executors.newFixedThreadPool(5)).unsafePerformSync
 

@@ -3,6 +3,7 @@ package org.nikosoft
 import iotaz.TListK.:::
 import iotaz.{CopK, TNilK}
 import scalaz._
+import Scalaz._
 
 object FreeMonadWithOMGSharedState extends App {
 

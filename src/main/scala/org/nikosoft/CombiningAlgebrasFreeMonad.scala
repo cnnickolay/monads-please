@@ -4,10 +4,12 @@ import scalaz._
 import Scalaz._
 import scalaz.concurrent.Task
 
+import scala.language.higherKinds
+
 object CombiningAlgebrasFreeMonad extends App {
 
   trait Logger[T]
-  case class Debug(message: String) extends Logger[Unit]
+  case class Debug(message: String) extends Logger[String]
 
   trait Transaction[T]
   case class Commit() extends Transaction[Unit]
@@ -15,6 +17,7 @@ object CombiningAlgebrasFreeMonad extends App {
   object Logger {
     class Ops[S[_]](implicit s0: Logger :<: S) {
       def debug(message: String) = Free.liftF(s0.inj(Debug(message)))
+      def debugAp(message: String) = FreeAp.lift(s0.inj(Debug(message)))
     }
 
     object Ops {
@@ -36,9 +39,10 @@ object CombiningAlgebrasFreeMonad extends App {
   def program[S[_]](implicit
                    logger: Logger.Ops[S],
                    transaction: Transaction.Ops[S]) = {
+
     for {
-      _ <- logger.debug("hi")
-      _ <- logger.debug("hi")
+      _ <- logger.debug("monadic")
+      _ <- (logger.debugAp("applicative 1") |@| logger.debugAp("applicative 2") |@| logger.debugAp("applicative 3"))(_ + _ + _).monadic
       _ <- transaction.commit()
     } yield ()
   }
@@ -48,7 +52,13 @@ object CombiningAlgebrasFreeMonad extends App {
 
   object LoggerInterpreter extends (Logger ~> Task) {
     override def apply[A](fa: Logger[A]): Task[A] = (fa match {
-      case Debug(message) => Task(println(message))
+      case Debug(message) => Task {
+        println(">>>")
+        println(message)
+        Thread.sleep(500)
+        println("<<<")
+        message + "_zzz"
+      }
     }).asInstanceOf[Task[A]]
   }
 
@@ -59,9 +69,6 @@ object CombiningAlgebrasFreeMonad extends App {
   }
 
   object EnrichNTOps {
-    /*
-     :+: taken from Quasar Analytics
-     */
     sealed abstract class :+:[F[_], G[_]] {
       type λ[A] = Coproduct[F, G, A]
     }

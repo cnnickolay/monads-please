@@ -1,10 +1,14 @@
 package org.nikosoft
 
 import scalaz._
+import Scalaz._
 import scalaz.concurrent.Task
 
 import scala.language.higherKinds
 
+/**
+  * We need to run some monads in parallel for better utilization of resources
+  */
 object FreeFreeMonad extends App {
 
   trait Logger[T]
@@ -24,7 +28,8 @@ object FreeFreeMonad extends App {
   }
 
   trait Wrapper[A]
-  case class ApplicativeWrapper[S[_], A](app: Free[S, A]) extends Wrapper[A]
+  case class SingleMonadWrapper[S[_], A](monad: Free[S, A]) extends Wrapper[A]
+  case class SequenceMonadWrapper[S[_], A](foldingFunction: Seq[A] => A, monads: Seq[Free[S, A]]) extends Wrapper[A]
 
   object Transaction {
     class Ops[S[_]](implicit s0: Transaction :<: S) {
@@ -38,7 +43,8 @@ object FreeFreeMonad extends App {
 
   object Wrapper {
     class Ops[S[_]](implicit s0: Wrapper :<: S) {
-      def applicativeWrapper[S[_], A](app: Free[S, A]) = Free.liftF(s0.inj(ApplicativeWrapper[S, A](app)))
+      def singleMonadWrapper[S[_], A](monad: Free[S, A]) = Free.liftF(s0.inj(SingleMonadWrapper[S, A](monad)))
+      def sequenceMonadWrapper[S[_], A](foldingFunction: Seq[A] => A)(monads: Free[S, A]*) = Free.liftF(s0.inj(SequenceMonadWrapper[S, A](foldingFunction, monads.toSeq)))
     }
 
     object Ops {
@@ -48,21 +54,34 @@ object FreeFreeMonad extends App {
 
   def program[S[_]](implicit
                    logger: Logger.Ops[S],
-                   wrapper: Wrapper.Ops[S]) = {
+                   wrapper: Wrapper.Ops[S],
+                   transaction: Transaction.Ops[S]) = {
+
+    import logger._
+    import wrapper._
+    import transaction._
 
     for {
-      _ <- logger.debug("monadic")
-      _ <- wrapper.applicativeWrapper(logger.debug("monadic"))
-    } yield ()
+      _      <- debug("monadic")
+      result <- sequenceMonadWrapper[S, String](_.foldLeft("")(_ + _))(
+                      debug("all"),
+                      debug("functions"),
+                      debug("should"),
+                      debug("run"),
+                      debug("asynchronously")
+      )
+      _      <- commit()
+    } yield result
   }
 
-  type Algebra[A] = Coproduct[Logger, Wrapper, A]
+  type TransactionAndWrapper[A] = Coproduct[Transaction, Wrapper, A]
+  type Algebra[A] = Coproduct[Logger, TransactionAndWrapper, A]
   val prog = program[Algebra]
 
   object LoggerInterpreter extends (Logger ~> Task) {
     override def apply[A](fa: Logger[A]): Task[A] = (fa match {
       case Debug(message) => Task {
-        println(">>>")
+        println(s">>> ${Thread.currentThread().getName}")
         println(message)
         Thread.sleep(500)
         println("<<<")
@@ -79,7 +98,12 @@ object FreeFreeMonad extends App {
 
   object WrapperInterpreter extends (Wrapper ~> Task) {
     override def apply[A](fa: Wrapper[A]): Task[A] = fa match {
-      case ApplicativeWrapper(free) => free.asInstanceOf[Free[Algebra, A]].foldMap(translator)
+      case SingleMonadWrapper(monad) => monad.asInstanceOf[Free[Algebra, A]].foldMap(translator)
+      case SequenceMonadWrapper(foldingFunction, monads) =>
+        val tasks = Nondeterminism[Task].gatherUnordered(
+          monads.asInstanceOf[Seq[Free[Algebra, A]]].map(_.foldMap(translator))
+        )
+        tasks.map(_ |> (_.toSeq) |> foldingFunction)
     }
   }
 
@@ -97,8 +121,10 @@ object FreeFreeMonad extends App {
 
   import EnrichNTOps._
 
-  val translator = LoggerInterpreter :+: WrapperInterpreter
+  val transactionAndWrapperTranslator: TransactionAndWrapper ~> Task = TransactionInterpreter :+: WrapperInterpreter
+  val translator: Algebra ~> Task = LoggerInterpreter :+: transactionAndWrapperTranslator
 
-  prog.foldMap(translator).unsafePerformSync
+  val result = prog.foldMap(translator).unsafePerformSync
+  println(s"Here we are: $result")
 
 }

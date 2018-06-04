@@ -50,26 +50,20 @@ object FreeFreeMonad extends App {
   }
 
   object Wrapper {
-
     class Ops[S[_]](implicit s0: Wrapper :<: S) {
-
       implicit class SingleMonadWrapperOps[S[_], A](monad: Free[S, A]) {
         def liftPar = singleMonadWrapper(monad)
       }
-
       def singleMonadWrapper[S[_], A](monad: Free[S, A]) = Free.liftF(s0.inj(SingleMonadWrapper[S, A](monad)))
-
       implicit class SequenceMonadWrapperOps[S[_], A](monads: Seq[Free[S, A]]) {
         def liftPar(foldingFunction: Seq[A] => A) = sequenceMonadWrapper(foldingFunction, monads)
       }
-
       def sequenceMonadWrapper[S[_], A](foldingFunction: Seq[A] => A, monads: Seq[Free[S, A]]) = Free.liftF(s0.inj(SequenceMonadWrapper[S, A](foldingFunction, monads)))
     }
 
     object Ops {
       implicit def apply[S[_]](implicit S: Wrapper :<: S) = new Ops[S]
     }
-
   }
 
   def program[S[_]](implicit

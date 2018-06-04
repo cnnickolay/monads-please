@@ -149,6 +149,6 @@ object FreeFreeMonad extends App {
   val translator: Algebra ~> MyRes = LoggerInterpreter :+: transactionAndWrapperTranslator
 
   val result = prog.foldMap(translator).run.unsafePerformSync
-//  println(s"Here we are: $result")
+  println(s"Here we are: $result")
 
 }

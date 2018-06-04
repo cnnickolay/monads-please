@@ -12,12 +12,15 @@ import scala.language.higherKinds
 object FreeFreeMonad extends App {
 
   trait Logger[T]
+
   case class Debug(message: String) extends Logger[String]
 
   trait Transaction[T]
+
   case class Commit() extends Transaction[Unit]
 
   object Logger {
+
     class Ops[S[_]](implicit s0: Logger :<: S) {
       def debug(message: String) = Free.liftF(s0.inj(Debug(message)))
     }
@@ -25,13 +28,17 @@ object FreeFreeMonad extends App {
     object Ops {
       implicit def apply[S[_]](implicit S: Logger :<: S) = new Ops[S]
     }
+
   }
 
   trait Wrapper[A]
+
   case class SingleMonadWrapper[S[_], A](monad: Free[S, A]) extends Wrapper[A]
+
   case class SequenceMonadWrapper[S[_], A](foldingFunction: Seq[A] => A, monads: Seq[Free[S, A]]) extends Wrapper[A]
 
   object Transaction {
+
     class Ops[S[_]](implicit s0: Transaction :<: S) {
       def commit() = Free.liftF(s0.inj(Commit()))
     }
@@ -39,38 +46,51 @@ object FreeFreeMonad extends App {
     object Ops {
       implicit def apply[S[_]](implicit S: Transaction :<: S) = new Ops[S]
     }
+
   }
 
   object Wrapper {
+
     class Ops[S[_]](implicit s0: Wrapper :<: S) {
+
+      implicit class SingleMonadWrapperOps[S[_], A](monad: Free[S, A]) {
+        def liftPar = singleMonadWrapper(monad)
+      }
+
       def singleMonadWrapper[S[_], A](monad: Free[S, A]) = Free.liftF(s0.inj(SingleMonadWrapper[S, A](monad)))
-      def sequenceMonadWrapper[S[_], A](foldingFunction: Seq[A] => A)(monads: Free[S, A]*) = Free.liftF(s0.inj(SequenceMonadWrapper[S, A](foldingFunction, monads.toSeq)))
+
+      implicit class SequenceMonadWrapperOps[S[_], A](monads: Seq[Free[S, A]]) {
+        def liftPar(foldingFunction: Seq[A] => A) = sequenceMonadWrapper(foldingFunction, monads)
+      }
+
+      def sequenceMonadWrapper[S[_], A](foldingFunction: Seq[A] => A, monads: Seq[Free[S, A]]) = Free.liftF(s0.inj(SequenceMonadWrapper[S, A](foldingFunction, monads)))
     }
 
     object Ops {
       implicit def apply[S[_]](implicit S: Wrapper :<: S) = new Ops[S]
     }
+
   }
 
   def program[S[_]](implicit
-                   logger: Logger.Ops[S],
-                   wrapper: Wrapper.Ops[S],
-                   transaction: Transaction.Ops[S]) = {
+                    logger: Logger.Ops[S],
+                    wrapper: Wrapper.Ops[S],
+                    transaction: Transaction.Ops[S]) = {
 
     import logger._
     import wrapper._
     import transaction._
 
     for {
-      _      <- debug("monadic")
-      result <- sequenceMonadWrapper[S, String](_.foldLeft("")(_ + _))(
-                      debug("all"),
-                      debug("functions"),
-                      debug("should"),
-                      debug("run"),
-                      debug("asynchronously")
-      )
-      _      <- commit()
+      _ <-         debug("monadic")
+      _ <-         debug("hi").liftPar
+      result <- Seq(
+                   debug("all"),
+                   debug("functions"),
+                   debug("should"),
+                   debug("run"),
+                   debug("asynchronously")).liftPar(_.foldLeft("")(_ + _))
+      _ <-         commit()
     } yield result
   }
 
@@ -108,6 +128,7 @@ object FreeFreeMonad extends App {
   }
 
   object EnrichNTOps {
+
     sealed abstract class :+:[F[_], G[_]] {
       type λ[A] = Coproduct[F, G, A]
     }
@@ -117,6 +138,7 @@ object FreeFreeMonad extends App {
         def apply[A](fa: (G :+: F)#λ[A]) = fa.run.fold(g, f)
       }
     }
+
   }
 
   import EnrichNTOps._

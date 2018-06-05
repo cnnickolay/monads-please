@@ -3,7 +3,7 @@ package org.nikosoft
 import scalaz._
 import Scalaz._
 import org.nikosoft.IotaHelpMeJoinAlgebrasPlease.{interpreter, service}
-import scalaz.concurrent.Task
+import scalaz.concurrent.{Future, Task}
 
 import scala.language.higherKinds
 
@@ -11,6 +11,13 @@ import scala.language.higherKinds
   * We need to run some monads in parallel for better utilization of resources
   */
 object FreeFreeMonad extends App {
+
+  implicit val parallelTaskApplicative = new Applicative[Task] {
+    def point[A](a: => A) = Task.now(a)
+    def ap[A,B](a: => Task[A])(f: => Task[A => B]): Task[B] = apply2(f,a)(_(_))
+    override def apply2[A,B,C](a: => Task[A], b: => Task[B])(f: (A,B) => C): Task[C] =
+      Nondeterminism[Task].mapBoth(a, b)(f)
+  }
 
   type MyRes[A] = OptionT[Task, A]
 
@@ -77,8 +84,7 @@ object FreeFreeMonad extends App {
     import transaction._
 
     for {
-      _ <-         debug("monadic")
-      _ <-         debug("hi").liftPar
+      _ <-         (debugAp("test") |@| debugAp("me") |@| debugAp("here") |@| debugAp("me") |@| debugAp("here"))(_ + _ + _ + _ + _).liftParApp
       result <- Seq(
                    debug("all"),
                    debug("functions"),
@@ -86,7 +92,7 @@ object FreeFreeMonad extends App {
                    debug("run"),
                    debug("asynchronously")).liftPar
       _ <-         commit()
-    } yield ""
+    } yield result
   }
 
   type TransactionAndWrapper[A] = Coproduct[Transaction, Wrapper, A]
@@ -98,7 +104,7 @@ object FreeFreeMonad extends App {
       case Debug(message) => OptionT[Task, A] (Task{
         println(s">>> ${Thread.currentThread().getName}")
         println(message)
-        Thread.sleep(500)
+        Thread.sleep(2000)
         println("<<<")
         Option(message + "_zzz").asInstanceOf[Option[A]]
       })
@@ -112,6 +118,26 @@ object FreeFreeMonad extends App {
         Some(())
       })
     }
+  }
+
+  implicit val myResNondeterminism = new Nondeterminism[MyRes] {
+    val F = Nondeterminism[Future]
+    override def chooseAny[A](h: MyRes[A], t: Seq[MyRes[A]]): MyRes[(A, Seq[MyRes[A]])] = {
+      val r: Task[(A, Seq[OptionT[Task, A]])] = new Task ( F.map(F.chooseAny(h.run.get, t map (_.run.get))) { case (a, residuals) =>
+        a.map(res => (res.get, residuals.map(f => OptionT(new Task(f)))))
+      })
+      OptionT[Task, (A, Seq[MyRes[A]])](r.map(Option(_)))
+    }
+
+    override def bind[A, B](fa: MyRes[A])(f: A => MyRes[B]): MyRes[B] = fa flatMap f
+
+    override def point[A](a: => A): MyRes[A] = OptionT(Task(Option(a)))
+  }
+
+  val myResApplicative = new Applicative[MyRes] {
+    def point[A](a: => A) = OptionT(Task(Option(a)))
+    def ap[A,B](a: => MyRes[A])(f: => MyRes[A => B]): MyRes[B] = apply2(f,a)(_(_))
+    override def apply2[A,B,C](a: => MyRes[A], b: => MyRes[B])(f: (A,B) => C): MyRes[C] = Nondeterminism[MyRes].mapBoth(a, b)(f)
   }
 
   object WrapperInterpreter extends (Wrapper ~> MyRes) {
@@ -128,7 +154,7 @@ object FreeFreeMonad extends App {
         resultTask
       }
       case ApplicativeWrapper(applicative) =>
-        applicative.asInstanceOf[FreeAp[Algebra, A]].foldMap(translator)
+        applicative.asInstanceOf[FreeAp[Algebra, A]].foldMap(translator)(myResApplicative)
     }
   }
 

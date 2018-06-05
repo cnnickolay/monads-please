@@ -3,6 +3,9 @@ package org.nikosoft
 import scalaz._
 import Scalaz._
 
+/**
+  * Very minor state monad example
+  */
 object StateMonadPleaseSaveMeFromVariables extends App {
 
   case class Memory(i: Int = 0)

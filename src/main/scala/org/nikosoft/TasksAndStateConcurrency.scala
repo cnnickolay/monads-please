@@ -7,7 +7,9 @@ import Scalaz._
 import scalaz.concurrent._
 
 /**
-  * Created by Nikolay Cherkezishvili on 29/05/2018
+  * Just trying to figure out how Nondeterminism works
+  *
+  * Created by Nikolai Cherkezishvili on 29/05/2018
   */
 object TasksAndStateConcurrency extends App {
 

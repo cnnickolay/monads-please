@@ -13,3 +13,4 @@ libraryDependencies += "com.storm-enroute" %% "scalameter-core" % "0.10.1"
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % Test
 libraryDependencies += "com.storm-enroute" %% "scalameter" % "0.10.1" % Test
 libraryDependencies += "io.frees" %% "iotaz-core" % "0.3.7"
+libraryDependencies += "com.chuusai" %% "shapeless" % "2.3.2"
